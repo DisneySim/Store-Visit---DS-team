@@ -72,6 +72,20 @@
   .secondaryBtn:disabled{opacity:.5; cursor:not-allowed;}
   .projectStatus{font-size:12px; color:var(--muted); min-height:15px; margin-top:6px;}
 
+  .syncBox{
+    margin-top:10px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface);
+  }
+  .syncGrid{display:grid; grid-template-columns:1fr auto; gap:8px;}
+  .syncInput{
+    width:100%; border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    border-radius:8px; padding:8px 10px; font-size:12.5px;
+  }
+  .smallBtn{
+    border:none; border-radius:8px; padding:8px 12px; background:var(--accent-2); color:var(--accent-ink);
+    font-size:12px; font-weight:700; cursor:pointer;
+  }
+  .syncHint{font-size:11px; color:var(--muted); margin-top:6px; line-height:1.4;}
+
   .confirmPanel{
     margin-top:10px; padding:12px; border:1px solid var(--danger); background:var(--danger-soft);
     border-radius:10px; font-size:13px; color:var(--ink);
@@ -148,13 +162,14 @@
   .bottombar .count{font-size:13px; color:var(--muted);}
   .bottombar .count b{color:var(--ink); font-family:'IBM Plex Mono',monospace;}
   .bottomActions{display:flex; gap:8px; flex-wrap:wrap;}
-  .genBtn, .saveBtn{
+  .genBtn, .saveBtn, .deleteBtn{
     border-radius:10px; padding:12px 20px; font-weight:700; font-size:14.5px; cursor:pointer; white-space:nowrap;
     display:flex; align-items:center; gap:8px;
   }
   .genBtn{ background:var(--accent-2); color:var(--accent-ink); border:none; }
   .saveBtn{ background:transparent; color:var(--accent-2); border:1.5px solid var(--accent-2); }
-  .genBtn:disabled, .saveBtn:disabled{opacity:.5; cursor:not-allowed;}
+  .deleteBtn{ background:var(--danger-soft); color:var(--danger); border:1.5px solid var(--danger); }
+  .genBtn:disabled, .saveBtn:disabled, .deleteBtn:disabled{opacity:.5; cursor:not-allowed;}
   .spinner{
     width:15px; height:15px; border-radius:50%; border:2px solid rgba(255,255,255,.4);
     border-top-color:currentColor; animation:spin .7s linear infinite; flex:none;
@@ -189,6 +204,14 @@
     </div>
     <div class="projectStatus" id="projectStatus"></div>
     <datalist id="projectList"></datalist>
+    <div class="syncBox">
+      <div class="syncGrid">
+        <input id="githubToken" class="syncInput" type="password" placeholder="GitHub PAT (for auto-sync to repo)" autocomplete="off">
+        <button id="githubApplyBtn" class="smallBtn" type="button">Apply</button>
+      </div>
+      <div class="syncHint">GitHub sync stores projects in <strong>/projects</strong> in this repo using your personal access token. This browser stores the token locally. For production, use a server-side token.</div>
+      <div class="syncHint" id="githubRepoInfo">Repo: DisneySim/Store-Visit---DS-team</div>
+    </div>
     <div class="confirmPanel" id="confirmPanel" hidden>
       <span id="confirmMsg"></span>
       <div class="confirmActions">
@@ -222,6 +245,9 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 4a1 1 0 0 1 1-1h9.17a1 1 0 0 1 .7.3l2.83 2.83a1 1 0 0 1 .3.7V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4Z" stroke="currentColor" stroke-width="1.5"/><path d="M9 9h6M9 13h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       Save Project
     </button>
+    <button class="deleteBtn" id="deleteBtn" type="button" disabled>
+      Delete Project
+    </button>
     <button class="genBtn" id="genBtn" type="button" disabled>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Generate PowerPoint
@@ -238,6 +264,7 @@
   "use strict";
   const TARGET_BYTES = 1000 * 1000;
   const MAX_DIM = 2000;
+  const GITHUB_DEFAULT_REPO = 'DisneySim/Store-Visit---DS-team';
 
   const grid = document.getElementById('grid');
   const emptyState = document.getElementById('emptyState');
@@ -245,12 +272,16 @@
   const addBtn = document.getElementById('addBtn');
   const genBtn = document.getElementById('genBtn');
   const saveBtn = document.getElementById('saveBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
   const openBtn = document.getElementById('openBtn');
   const countLabel = document.getElementById('countLabel');
   const visitTitle = document.getElementById('visitTitle');
   const yourNameInput = document.getElementById('yourName');
   const projectStatusEl = document.getElementById('projectStatus');
   const projectListEl = document.getElementById('projectList');
+  const githubTokenEl = document.getElementById('githubToken');
+  const githubApplyBtn = document.getElementById('githubApplyBtn');
+  const githubRepoInfo = document.getElementById('githubRepoInfo');
   const confirmPanel = document.getElementById('confirmPanel');
   const confirmMsg = document.getElementById('confirmMsg');
   const confirmCancel = document.getElementById('confirmCancel');
@@ -263,8 +294,13 @@
   let currentProject = null;
   let pendingOpenSlug = null;
   const hasIndexedDB = typeof indexedDB !== 'undefined';
+  let githubToken = localStorage.getItem('storeWalkLog:githubToken') || '';
+  let githubRepo = localStorage.getItem('storeWalkLog:githubRepo') || GITHUB_DEFAULT_REPO;
 
   fetch('wave-banner.png').then(r => r.blob()).then(blobToDataURL).then(url => { waveBannerDataUrl = url; }).catch(() => {});
+
+  githubTokenEl.value = githubToken;
+  githubRepoInfo.textContent = 'Repo: ' + githubRepo;
 
   try {
     yourNameInput.value = localStorage.getItem('storeWalkLog:yourName') || '';
@@ -273,58 +309,149 @@
     try { localStorage.setItem('storeWalkLog:yourName', yourNameInput.value); } catch (e) {}
   });
 
-  const IDB_NAME = 'store-walk-log';
-  const IDB_STORE = 'projects';
+  githubApplyBtn.addEventListener('click', () => {
+    githubToken = (githubTokenEl.value || '').trim();
+    try { localStorage.setItem('storeWalkLog:githubToken', githubToken); } catch (e) {}
+    if (!githubToken) {
+      showToast('GitHub sync is off. Paste a token to enable auto-sync.', true);
+      return;
+    }
+    githubRepo = GITHUB_DEFAULT_REPO;
+    try { localStorage.setItem('storeWalkLog:githubRepo', githubRepo); } catch (e) {}
+    githubRepoInfo.textContent = 'Repo: ' + githubRepo;
+    showToast('GitHub sync enabled for this repo.');
+  });
 
-  function openIdb(){
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(IDB_NAME, 1);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE, { keyPath: 'slug' });
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  async function dbGetProject(slug){
-    const db = await openIdb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readonly');
-      const req = tx.objectStore(IDB_STORE).get(slug);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  async function dbPutProject(record){
-    const db = await openIdb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(record);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-  async function dbListProjects(){
-    const db = await openIdb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readonly');
-      const req = tx.objectStore(IDB_STORE).getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
+  function getGitHubRepoParts(){
+    const repoName = (githubRepo || GITHUB_DEFAULT_REPO).trim();
+    const [owner, repo] = repoName.split('/');
+    if (!owner || !repo) return null;
+    return { owner, repo, full: `${owner}/${repo}` };
   }
 
-  function slugify(name){
-    return (name || '').trim().toLowerCase();
+  function encodeBase64(str){
+    const encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+    const bytes = encoder ? encoder.encode(str) : unescape(encodeURIComponent(str));
+    if (encoder) {
+      let binary = '';
+      const arr = Array.from(bytes);
+      arr.forEach(b => { binary += String.fromCharCode(b); });
+      return btoa(binary);
+    }
+    return btoa(bytes);
+  }
+
+  function toProjectJson(record){
+    return JSON.stringify(record, null, 2);
+  }
+
+  async function callGithubJson(url, options = {}){
+    const headers = {
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(options.headers || {})
+    };
+    if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
+    const response = await fetch(url, { ...options, headers });
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+    if (!response.ok) {
+      const message = (data && (data.message || data.error)) || response.statusText || 'GitHub request failed';
+      throw new Error(message);
+    }
+    return data;
+  }
+
+  async function listRemoteProjects(){
+    if (!githubToken) return [];
+    const repoInfo = getGitHubRepoParts();
+    if (!repoInfo) return [];
+    try {
+      const data = await callGithubJson(`https://api.github.com/repos/${repoInfo.full}/contents/projects`);
+      if (!Array.isArray(data)) return [];
+      return data.filter(item => item.type === 'file' && item.name.endsWith('.json')).map(item => item.name.replace(/\.json$/i, ''));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function getRemoteProjectFile(projectSlug){
+    if (!githubToken) return null;
+    const repoInfo = getGitHubRepoParts();
+    if (!repoInfo) return null;
+    const filePath = `projects/${projectSlug}.json`;
+    try {
+      const data = await callGithubJson(`https://api.github.com/repos/${repoInfo.full}/contents/${filePath}`);
+      if (!data || !data.content) return null;
+      const decoded = atob((data.content || '').replace(/\n/g, ''));
+      return JSON.parse(decoded);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function saveProjectToGitHub(record){
+    if (!githubToken) return { ok: false, reason: 'missing-token' };
+    const repoInfo = getGitHubRepoParts();
+    if (!repoInfo) return { ok: false, reason: 'invalid-repo' };
+    const filePath = `projects/${record.slug}.json`;
+    const payload = toProjectJson(record);
+    const body = {
+      message: `Save project ${record.displayName || record.slug}`,
+      content: encodeBase64(payload),
+      branch: 'main'
+    };
+    try {
+      const existing = await callGithubJson(`https://api.github.com/repos/${repoInfo.full}/contents/${filePath}`);
+      if (existing && existing.sha) body.sha = existing.sha;
+    } catch (e) {
+      // File does not exist yet.
+    }
+    try {
+      await callGithubJson(`https://api.github.com/repos/${repoInfo.full}/contents/${filePath}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: e.message };
+    }
+  }
+
+  async function deleteProjectFromGitHub(projectSlug){
+    if (!githubToken) return { ok: false, reason: 'missing-token' };
+    const repoInfo = getGitHubRepoParts();
+    if (!repoInfo) return { ok: false, reason: 'invalid-repo' };
+    const filePath = `projects/${projectSlug}.json`;
+    try {
+      const existing = await callGithubJson(`https://api.github.com/repos/${repoInfo.full}/contents/${filePath}`);
+      if (!existing || !existing.sha) return { ok: false, reason: 'project-not-found' };
+      await callGithubJson(`https://api.github.com/repos/${repoInfo.full}/contents/${filePath}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `Delete project ${projectSlug}`,
+          sha: existing.sha,
+          branch: 'main'
+        })
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: e.message };
+    }
   }
 
   async function refreshProjectList(){
     if (!hasIndexedDB) return;
     try {
       const list = await dbListProjects();
-      list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-      projectListEl.innerHTML = list.map(r => `<option value="${(r.displayName || r.slug).replace(/"/g, '&quot;')}">`).join('');
+      const localNames = list.map(r => (r.displayName || r.slug)).filter(Boolean);
+      const remoteNames = await listRemoteProjects();
+      const merged = [...new Set([...localNames, ...remoteNames.map(name => name.replace(/_/g, ' '))])];
+      merged.sort((a, b) => b.localeCompare(a));
+      projectListEl.innerHTML = merged.map(name => `<option value="${name.replace(/"/g, '&quot;')}">`).join('');
     } catch (e) {}
   }
 
@@ -338,43 +465,102 @@
     projectStatusEl.textContent = `"${currentProject.displayName}" · started by ${currentProject.ownerName || 'someone'}${started ? ' · ' + started : ''}`;
   }
 
+  async function loadProjectFromGithubByName(rawNameTyped){
+    if (!githubToken) return null;
+    const slug = slugify(rawNameTyped);
+    const remote = await getRemoteProjectFile(slug);
+    if (!remote) return null;
+    const project = normalizeProjectRecord(remote, rawNameTyped);
+    if (!project) return null;
+    photos.splice(0, photos.length).forEach(p => { if (p.displayUrl && p.displayUrl.startsWith('blob:')) URL.revokeObjectURL(p.displayUrl); });
+    grid.innerHTML = '';
+    (project.photos || []).forEach(sp => {
+      const id = ++seq;
+      const blob = sp.blob || null;
+      photos.push({
+        id, file: null,
+        displayUrl: blob ? URL.createObjectURL(blob) : '',
+        originalSize: sp.originalSize || (blob ? blob.size : 0),
+        takenAt: sp.takenAt ? new Date(sp.takenAt) : null,
+        usedFallbackDate: !!sp.usedFallbackDate,
+        location: sp.location || '', caption: sp.caption || '', gps: sp.gps || '',
+        compressing: false, compressedBlob: blob, compressedSize: sp.compressedSize != null ? sp.compressedSize : (blob ? blob.size : null),
+        compressFailed: !blob,
+        imgWidth: sp.imgWidth || 0, imgHeight: sp.imgHeight || 0,
+        addedByName: sp.addedByName || ''
+      });
+    });
+    visitTitle.value = project.displayName || rawNameTyped;
+    currentProject = { slug: project.slug, displayName: project.displayName, ownerName: project.ownerName, createdAt: project.createdAt };
+    updateProjectStatus();
+    render();
+    renderLocList();
+    return project;
+  }
+
+  function normalizeProjectRecord(record, rawNameTyped){
+    if (!record || !record.slug) return null;
+    const normalized = {
+      slug: String(record.slug),
+      displayName: record.displayName || rawNameTyped || String(record.slug),
+      ownerName: record.ownerName || 'Unknown',
+      createdAt: record.createdAt || new Date().toISOString(),
+      updatedAt: record.updatedAt || new Date().toISOString(),
+      photos: Array.isArray(record.photos) ? record.photos.map(p => ({
+        blob: p.blob || null,
+        caption: p.caption || '', location: p.location || '', gps: p.gps || '',
+        takenAt: p.takenAt || null,
+        usedFallbackDate: !!p.usedFallbackDate,
+        imgWidth: p.imgWidth || 0, imgHeight: p.imgHeight || 0,
+        originalSize: p.originalSize || 0, compressedSize: p.compressedSize || null,
+        addedByName: p.addedByName || ''
+      })) : []
+    };
+    return normalized;
+  }
+
   async function loadProject(slug, rawNameTyped){
     openBtn.disabled = true;
     const original = openBtn.textContent;
     openBtn.textContent = 'Opening…';
     try {
       const record = await dbGetProject(slug);
-      if (!record) {
-        showToast(`No saved project named "${rawNameTyped}" on this device.`, true);
+      if (record) {
+        photos.splice(0, photos.length).forEach(p => { if (p.displayUrl && p.displayUrl.startsWith('blob:')) URL.revokeObjectURL(p.displayUrl); });
+        grid.innerHTML = '';
+        (record.photos || []).forEach(sp => {
+          const id = ++seq;
+          const blob = sp.blob || null;
+          photos.push({
+            id, file: null,
+            displayUrl: blob ? URL.createObjectURL(blob) : '',
+            originalSize: sp.originalSize || (blob ? blob.size : 0),
+            takenAt: sp.takenAt ? new Date(sp.takenAt) : null,
+            usedFallbackDate: !!sp.usedFallbackDate,
+            location: sp.location || '', caption: sp.caption || '', gps: sp.gps || '',
+            compressing: false, compressedBlob: blob, compressedSize: sp.compressedSize != null ? sp.compressedSize : (blob ? blob.size : null),
+            compressFailed: !blob,
+            imgWidth: sp.imgWidth || 0, imgHeight: sp.imgHeight || 0,
+            addedByName: sp.addedByName || ''
+          });
+        });
+        visitTitle.value = record.displayName || rawNameTyped;
+        currentProject = { slug: record.slug, displayName: record.displayName, ownerName: record.ownerName, createdAt: record.createdAt };
+        updateProjectStatus();
+        render();
+        renderLocList();
+        const n = (record.photos || []).length;
+        showToast(`Opened "${record.displayName}" — ${n} photo${n === 1 ? '' : 's'} loaded.`);
         return;
       }
-      photos.splice(0, photos.length).forEach(p => { if (p.displayUrl && p.displayUrl.startsWith('blob:')) URL.revokeObjectURL(p.displayUrl); });
-      grid.innerHTML = '';
-      (record.photos || []).forEach(sp => {
-        const id = ++seq;
-        const blob = sp.blob || null;
-        photos.push({
-          id, file: null,
-          displayUrl: blob ? URL.createObjectURL(blob) : '',
-          originalSize: sp.originalSize || (blob ? blob.size : 0),
-          takenAt: sp.takenAt ? new Date(sp.takenAt) : null,
-          usedFallbackDate: !!sp.usedFallbackDate,
-          location: sp.location || '', caption: sp.caption || '', gps: sp.gps || '',
-          compressing: false, compressedBlob: blob, compressedSize: sp.compressedSize != null ? sp.compressedSize : (blob ? blob.size : null),
-          compressFailed: !blob,
-          imgWidth: sp.imgWidth || 0, imgHeight: sp.imgHeight || 0,
-          addedByName: sp.addedByName || ''
-        });
-      });
-      visitTitle.value = record.displayName || rawNameTyped;
-      currentProject = { slug: record.slug, displayName: record.displayName, ownerName: record.ownerName, createdAt: record.createdAt };
-      updateProjectStatus();
-      render();
-      renderLocList();
-      const n = (record.photos || []).length;
-      showToast(`Opened "${record.displayName}" — ${n} photo${n === 1 ? '' : 's'} loaded.`);
+      const remote = await loadProjectFromGithubByName(rawNameTyped);
+      if (remote) {
+        showToast(`Opened remote project "${remote.displayName}".`);
+        return;
+      }
+      showToast(`No saved project named "${rawNameTyped}" on this device or GitHub.`, true);
     } catch (e) {
-      showToast("Couldn't open that project on this device.", true);
+      showToast("Couldn't open that project.", true);
     } finally {
       openBtn.disabled = !hasIndexedDB;
       openBtn.textContent = original;
@@ -402,8 +588,7 @@
     if (slug) await loadProject(slug, visitTitle.value.trim());
   });
 
-  saveBtn.addEventListener('click', async () => {
-    if (!hasIndexedDB) return;
+  async function saveProjectLocallyAndSync(){
     const raw = visitTitle.value.trim();
     const slug = slugify(raw);
     if (!slug) { showToast('Type a project name before saving.', true); return; }
@@ -440,12 +625,64 @@
       currentProject = { slug, displayName: raw, ownerName, createdAt: record.createdAt };
       updateProjectStatus();
       await refreshProjectList();
-      showToast('Project saved on this device.');
+      if (githubToken) {
+        const syncResult = await saveProjectToGitHub(record);
+        if (!syncResult.ok) {
+          showToast('Saved locally. GitHub sync failed: ' + (syncResult.reason || 'unknown error'), true);
+        } else {
+          showToast('Project saved locally and synced to GitHub.');
+        }
+      } else {
+        showToast('Project saved on this device.');
+      }
     } catch (e) {
       showToast("Couldn't save — this browser may be low on storage.", true);
     } finally {
       saveBtn.disabled = photos.length === 0 || !hasIndexedDB;
       saveBtn.innerHTML = original;
+    }
+  }
+
+  saveBtn.addEventListener('click', saveProjectLocallyAndSync);
+
+  deleteBtn.addEventListener('click', async () => {
+    const raw = visitTitle.value.trim();
+    const slug = slugify(raw);
+    if (!slug) { showToast('Type a project name first.', true); return; }
+    const confirmed = confirm(`Delete "${raw}" and all related photos from this device and GitHub?`);
+    if (!confirmed) return;
+
+    try {
+      const local = await dbGetProject(slug);
+      if (local) {
+        await new Promise((resolve, reject) => {
+          const req = indexedDB.open('store-walk-log', 1);
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction('projects', 'readwrite');
+            tx.objectStore('projects').delete(slug);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          };
+          req.onerror = () => reject(req.error);
+        });
+      }
+      if (githubToken) {
+        const remoteDelete = await deleteProjectFromGitHub(slug);
+        if (!remoteDelete.ok && remoteDelete.reason !== 'project-not-found') {
+          showToast('Project removed locally, but GitHub delete failed: ' + remoteDelete.reason, true);
+        }
+      }
+      photos.splice(0, photos.length).forEach(p => { if (p.displayUrl && p.displayUrl.startsWith('blob:')) URL.revokeObjectURL(p.displayUrl); });
+      grid.innerHTML = '';
+      visitTitle.value = '';
+      currentProject = null;
+      updateProjectStatus();
+      render();
+      await refreshProjectList();
+      showToast('Project deleted.');
+    } catch (e) {
+      showToast('Could not delete this project.', true);
     }
   });
 
@@ -598,6 +835,7 @@
     emptyState.hidden = photos.length > 0;
     genBtn.disabled = photos.length === 0;
     saveBtn.disabled = photos.length === 0 || !hasIndexedDB;
+    deleteBtn.disabled = photos.length === 0 && !currentProject;
     openBtn.disabled = !hasIndexedDB;
 
     const known = new Set();
