@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);}</style>
 <title>Store Walk Log</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -175,7 +175,7 @@
   <header class="top">
     <div class="brand">
       <div class="stamp" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h2.2l1-1.6A1.5 1.5 0 0 1 11 3.7h2a1.5 1.5 0 0 1 1.3.7l1 1.6h2.2A2.5 2.5 0 0 1 20 8.5v9A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-9Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12.5" r="3.4" stroke="currentColor" stroke-width="1.6"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h2.2l1-1.6A1.5 1.5 0 0 1 11 3.7h2a1.5 1.5 0 0 1 1.3.7l1 1.6h2.2A2.5 2.5 0 0 1 20 8.5v9A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-9Z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="13.5" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
       </div>
       <div>
         <span class="eyebrow">Field Photo Log</span>
@@ -207,7 +207,7 @@
 
     <div class="empty" id="emptyState">
       <strong>No photos yet</strong>
-      Tap “Add Photos” to pick shots from this visit. Date comes straight from each photo’s metadata — type a location for each, and photos sharing the same location land on one slide together.
+      Tap "Add Photos" to pick shots from this visit. Date comes straight from each photo's metadata — type a location for each, and photos sharing the same location land on one slide together.
     </div>
 
     <div class="grid" id="grid"></div>
@@ -219,11 +219,11 @@
   <span class="count" id="countLabel"><b>0</b> photos</span>
   <div class="bottomActions">
     <button class="saveBtn" id="saveBtn" type="button" disabled>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 4a1 1 0 0 1 1-1h9.17a1 1 0 0 1 .7.3l2.83 2.83a1 1 0 0 1 .3.7V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4Z" stroke="currentColor" stroke-width="1.8"/><path d="M8 3.5v5h7v-5M8 21v-6h8v6" stroke="currentColor" stroke-width="1.8"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 4a1 1 0 0 1 1-1h9.17a1 1 0 0 1 .7.3l2.83 2.83a1 1 0 0 1 .3.7V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4Z" stroke="currentColor" stroke-width="1.5"/><path d="M9 9h6M9 13h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       Save Project
     </button>
     <button class="genBtn" id="genBtn" type="button" disabled>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Generate PowerPoint
     </button>
   </div>
@@ -236,7 +236,7 @@
 <script>
 (function(){
   "use strict";
-  const TARGET_BYTES = 1000 * 1000; // "under 1MB"
+  const TARGET_BYTES = 1000 * 1000;
   const MAX_DIM = 2000;
 
   const grid = document.getElementById('grid');
@@ -257,26 +257,22 @@
   const confirmProceed = document.getElementById('confirmProceed');
   const toastEl = document.getElementById('toast');
 
-  /** @type {Array<any>} */
   const photos = [];
   let seq = 0;
-  let downloadsApi = null;
   let waveBannerDataUrl = null;
-  let currentProject = null; // { slug, displayName, ownerName, createdAt } once opened or saved
+  let currentProject = null;
   let pendingOpenSlug = null;
   const hasIndexedDB = typeof indexedDB !== 'undefined';
 
-  window.claude?.use?.('downloads')?.then(api => { downloadsApi = api; }).catch(() => {});
   fetch('wave-banner.png').then(r => r.blob()).then(blobToDataURL).then(url => { waveBannerDataUrl = url; }).catch(() => {});
 
   try {
     yourNameInput.value = localStorage.getItem('storeWalkLog:yourName') || '';
-  } catch (e) { /* private browsing or storage blocked — leave blank */ }
+  } catch (e) {}
   yourNameInput.addEventListener('input', () => {
     try { localStorage.setItem('storeWalkLog:yourName', yourNameInput.value); } catch (e) {}
   });
 
-  // ---- Local (this-device-only) project storage, via IndexedDB ----
   const IDB_NAME = 'store-walk-log';
   const IDB_STORE = 'projects';
 
@@ -329,7 +325,7 @@
       const list = await dbListProjects();
       list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
       projectListEl.innerHTML = list.map(r => `<option value="${(r.displayName || r.slug).replace(/"/g, '&quot;')}">`).join('');
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
   }
 
   function updateProjectStatus(){
@@ -339,7 +335,7 @@
     }
     if (!currentProject) { projectStatusEl.textContent = ''; return; }
     const started = currentProject.createdAt ? fmtDate(new Date(currentProject.createdAt)) : '';
-    projectStatusEl.textContent = `“${currentProject.displayName}” · started by ${currentProject.ownerName || 'someone'}${started ? ' · ' + started : ''}`;
+    projectStatusEl.textContent = `"${currentProject.displayName}" · started by ${currentProject.ownerName || 'someone'}${started ? ' · ' + started : ''}`;
   }
 
   async function loadProject(slug, rawNameTyped){
@@ -493,7 +489,7 @@
       if (typeof meta?.latitude === 'number' && typeof meta?.longitude === 'number') {
         gpsText = fmtCoords(meta.latitude, meta.longitude);
       }
-    } catch (err) { /* no readable EXIF — fall through */ }
+    } catch (err) {}
     if (!takenAt && file.lastModified) {
       takenAt = new Date(file.lastModified);
       usedFallbackDate = true;
@@ -591,8 +587,8 @@
 
   function svgIcon(name){
     const icons = {
-      calendar: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
-      pin: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.8 7-12a7 7 0 1 0-14 0c0 5.2 7 12 7 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="2.4" stroke="currentColor" stroke-width="1.8"/></svg>'
+      calendar: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.5"/></svg>',
+      pin: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.8 7-12a7 7 0 1 0-14 0c0 5.2 7 12 7 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="1.5" fill="currentColor"/></svg>',
     };
     return icons[name] || '';
   }
@@ -725,18 +721,15 @@
     return (name || 'Store Visit').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'Store Visit';
   }
 
-  // Uses the Artifact's downloads capability when running inside claude.ai;
-  // falls back to a plain browser download (works once self-hosted, or anywhere window.claude isn't present).
-  async function saveOrDownload(filename, blob){
-    if (downloadsApi) return downloadsApi.save({ filename, data: blob });
+  async function downloadFile(filename, blob){
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = filename;
+    a.href = url;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-    return { status: 'saved' };
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   async function buildDeck(){
@@ -755,7 +748,6 @@
       }
     }
 
-    // Places an image at its true aspect ratio inside a bounding box (letterboxed, never stretched).
     function addPhotoContain(slide, dataUrl, imgW, imgH, boxX, boxY, boxW, boxH){
       let w = boxW, h = boxH;
       if (imgW > 0 && imgH > 0) {
@@ -853,7 +845,7 @@
       }
     }
 
-    return pptx.write();
+    return pptx.write({ outputType: 'blob' });
   }
 
   genBtn.addEventListener('click', async () => {
@@ -877,19 +869,11 @@
 
       const blob = await buildDeck();
       const filename = sanitizeFilename(visitTitle.value.trim() || 'Store Visit') + '.pptx';
-      const result = await saveOrDownload(filename, blob);
-      showToast(result.status === 'saved' ? 'PowerPoint saved.' : 'PowerPoint sent.');
+      await downloadFile(filename, blob);
+      showToast('PowerPoint downloaded successfully!');
     } catch (err) {
-      const code = err?.code;
-      if (code === 'declined') {
-        // viewer said no — no message needed
-      } else if (code === 'too_large') {
-        showToast('That deck is too large to save here — try fewer photos in one export.', true);
-      } else if (code === 'rate_limited') {
-        showToast('Still finishing the last save — try again in a moment.', true);
-      } else {
-        showToast("Couldn't build the PowerPoint — try again.", true);
-      }
+      console.error('PowerPoint generation error:', err);
+      showToast("Couldn't build the PowerPoint — try again.", true);
     } finally {
       genBtn.disabled = photos.length === 0;
       genBtn.innerHTML = originalHtml;
