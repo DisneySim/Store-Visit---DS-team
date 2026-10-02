@@ -59,8 +59,59 @@ function render(){ $('countLabel').innerHTML=`<b>${photos.length}</b> photo${pho
 $('saveBtn').onclick=async()=>{const name=visitTitle.value.trim(),slug=slugify(name);if(!slug)return toast('Type a project name before saving.');if(photos.some(p=>p.working))return toast('Please wait for photo compression to finish.');const old=await dbGet(slug),now=new Date().toISOString();const record={slug,displayName:name,ownerName:old?.ownerName||nameInput.value.trim()||'Unknown',createdAt:old?.createdAt||now,updatedAt:now,photos:photos.map(p=>({blob:p.blob||p.file,location:p.location,caption:p.caption,gps:p.gps||'',takenAt:p.takenAt?.toISOString()||null,originalSize:p.size,compressedSize:p.compressedSize,width:p.width,height:p.height}))};await dbPut(record);current=record;updateStatus();await refreshList();toast('Project saved on this device.')};
 function dataUrl(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob)})}
 function groups(){const map=new Map();photos.forEach(p=>{const key=(p.location||'').trim().toLowerCase()||'location not noted';if(!map.has(key))map.set(key,{label:p.location.trim()||'Location not noted',items:[]});map.get(key).items.push(p)});return[...map.values()]}
+function chunkArray(list,size){const out=[];for(let i=0;i<list.length;i+=size)out.push(list.slice(i,i+size));return out}
 function calcPhotoSize(imgW,imgH,maxW,maxH){if(imgW<=0||imgH<=0)return{w:maxW,h:maxH};const scale=Math.min(maxW/imgW,maxH/imgH);return{w:imgW*scale,h:imgH*scale}}
-$('genBtn').onclick=async()=>{if(!photos.length||photos.some(p=>p.working))return toast('Please wait for photo compression to finish.');const ppt=new PptxGenJS();ppt.layout='LAYOUT_WIDE';const navy='0B1A45',purple='6B2E8F',gray='4A4A4A',white='FFFFFF';let page=1;const title=visitTitle.value.trim()||'Store Visit Recap';let s=ppt.addSlide();s.background={color:navy};s.addText('DISNEY STORE',{x:.9,y:1,w:10,h:.5,fontSize:18,bold:true,color:white});s.addText(title,{x:.9,y:1.8,w:11,h:1,fontSize:38,bold:true,color:'D2AB6D'});s.addText('Logged by '+(nameInput.value.trim()||'Unknown'),{x:.9,y:3.2,w:10,h:.4,fontSize:13,color:'C48FB2'});s.addText(String(page++),{x:12.3,y:7.1,w:.5,h:.3,color:'C48FB2',align:'right'});for(const g of groups()){let idx=0;while(idx<g.items.length){const batch=g.items.slice(idx,idx+4);idx+=4;s=ppt.addSlide();s.background={color:white};s.addText(g.label.toUpperCase(),{x:.6,y:.7,w:12,h:.5,fontSize:24,bold:true,color:purple});s.addText(batch.map(p=>fmtDate(p.takenAt)).join(' · '),{x:.6,y:1.25,w:12,h:.3,fontSize:11,color:gray});const cols=batch.length<=2?2:2,rows=Math.ceil(batch.length/cols),gap=.3,availW=12.1-gap*(cols-1),availH=5.1-gap*(rows-1),cw=availW/cols,ch=availH/rows;for(let i=0;i<batch.length;i++){const p=batch[i],row=Math.floor(i/cols),col=i%cols,x=.6+col*(cw+gap),y=1.8+row*(ch+gap),boxW=cw*.95,boxH=ch*.8,size=calcPhotoSize(p.width,p.height,boxW,boxH),imgX=x+(boxW-size.w)/2,imgY=y+(boxH-size.h)/2,u=await dataUrl(p.blob||p.file);s.addImage({data:u,x:imgX,y:imgY,w:size.w,h:size.h});const capY=y+boxH+.05;s.addText(p.caption||'No caption',{x,y:capY,w:cw,h:.3,fontSize:9,color:gray,align:'left'})}}};const blob=await ppt.write({outputType:'blob'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(title.replace(/[\\/:*?"<>|]+/g,' ').slice(0,80)||'Store Visit')+'.pptx';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('PowerPoint downloaded.')};
+function titleCase(value){return (value||'').replace(/\s+/g,' ').trim() || 'Untitled';}
+$('genBtn').onclick=async()=>{if(!photos.length||photos.some(p=>p.working))return toast('Please wait for photo compression to finish.');
+  const ppt=new PptxGenJS();
+  ppt.layout='LAYOUT_WIDE';
+  const NAVY='0B1A45', PURPLE='6B2E8F', PINK='C48FB2', GOLD='D2AB6D', GRAY='4A4A4A', WHITE='FFFFFF';
+  const title=visitTitle.value.trim()||'Store Visit Recap';
+  let slideNum=1;
+
+  const cover=ppt.addSlide();
+  cover.background={color:NAVY};
+  cover.addText('DISNEY STORE',{x:.8,y:1,w:10,h:.5,fontSize:18,bold:true,color:WHITE});
+  cover.addText(title,{x:.8,y:1.8,w:11,h:1.1,fontSize:34,bold:true,color:GOLD});
+  cover.addText('Logged by '+(nameInput.value.trim()||'Unknown'),{x:.8,y:3.1,w:10,h:.4,fontSize:12,color:PINK});
+  cover.addText(String(slideNum++),{x:12.15,y:7.1,w:.5,h:.3,color:PINK,align:'right'});
+
+  for(const group of groups()){
+    const batches=chunkArray(group.items,4);
+    for(const batch of batches){
+      const slide=ppt.addSlide();
+      slide.background={color:WHITE};
+      slide.addText(titleCase(group.label),{x:.7,y:.45,w:11.5,h:.5,fontSize:22,bold:true,color:PURPLE});
+      slide.addText(batch.map(p=>fmtDate(p.takenAt)).join(' · '),{x:.7,y:1.05,w:11.5,h:.3,fontSize:10,color:GRAY});
+      const columns=2, rows=2, gapX=.42, gapY=.42;
+      const cellW=(12.2 - gapX)/columns;
+      const cellH=(5.7 - gapY)/rows;
+      for(let i=0;i<batch.length;i++){
+        const photo=batch[i];
+        const col=i%columns,row=Math.floor(i/columns);
+        const x=.7 + col*(cellW+gapX);
+        const y=1.55 + row*(cellH+gapY);
+        const boxW=cellW;
+        const boxH=cellH-0.45;
+        const imgSize=calcPhotoSize(photo.width||0,photo.height||0,boxW-0.12,boxH-0.18);
+        const imgX=x + (boxW - imgSize.w)/2;
+        const imgY=y + 0.04;
+        const data = await dataUrl(photo.blob || photo.file);
+        slide.addImage({data, x:imgX, y:imgY, w:imgSize.w, h:imgSize.h});
+        const caption = (photo.caption || 'No caption provided').trim() || 'No caption provided';
+        slide.addText(caption,{x:x, y:y+boxH+0.05, w:boxW, h:0.36, fontSize:8.5, color:GRAY, valign:'middle', margin:0, breakLine:true});
+      }
+      slide.addText(String(slideNum++),{x:12.15,y:7.1,w:.5,h:.3,color:GRAY,align:'right'});
+    }
+  }
+
+  const blob=await ppt.write({outputType:'blob'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=(title.replace(/[\\/:*?\"<>|]+/g,' ').slice(0,80)||'Store Visit')+'.pptx';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('PowerPoint downloaded.');
+};
 refreshList();render();
 })();
 </script>
